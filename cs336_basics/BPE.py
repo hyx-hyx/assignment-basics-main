@@ -1,11 +1,23 @@
 import multiprocessing
-
+import time
 import regex as re
 
 from pretokenization_example import find_chunk_boundaries
 
 
-def pre_tokenization(pat: str, text: str):
+def pre_tokenization(pat:str,text: str):
+    bytes_dict = {}
+    for m in re.finditer(pat, text):
+        substr = m.group()
+        str_encode = tuple(c.encode() for c in substr)
+        if str_encode in bytes_dict.keys():
+            bytes_dict[str_encode] += 1
+        else:
+            bytes_dict[str_encode] = 1
+    return bytes_dict
+
+def multiprocess_pre_tokenization(text: str):
+    pat = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
     bytes_dict = {}
     for m in re.finditer(pat, text):
         substr = m.group()
@@ -66,15 +78,16 @@ def bpe_train(input_path: str, vocab_size: int, special_tokens: list[str]):
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
+        chunks = []
         for start, end in zip(boundaries[:-1], boundaries[1:]):
             f.seek(start)
-            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+            chunks.append(f.read(end - start).decode("utf-8", errors="ignore"))
 
-            # Run pre-tokenization on your chunk and store the counts for each pre-token
-            pat = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-            bytes_dict = pre_tokenization(pat, chunk)
-
-            for i in range(0, 20):
+        # Run pre-tokenization on your chunk and store the counts for each pre-token
+        with multiprocessing.Pool(num_processes) as pool:
+            bytes_dict_list = pool.map(multiprocess_pre_tokenization, chunks, chunksize=1)
+        for bytes_dict in bytes_dict_list:
+            for i in range(0, 6):
                 max_pair = find_max_pair(bytes_dict)
 
                 # 添加到vocab
@@ -86,18 +99,9 @@ def bpe_train(input_path: str, vocab_size: int, special_tokens: list[str]):
 
 
 if __name__ == "__main__":
-    vocab, merges = bpe_train(r"../data/TinyStories/TinyStoriesV2-GPT4-valid.txt", 30000, ["<|endoftext|>"])
+    start = time.time()
+    vocab, merges = bpe_train(r"../data/TinyStories/TinyStories-train.txt", 30000, ["<|endoftext|>"])
     print(vocab)
     print(merges)
-
-#     text = """Once upon a time, in a warm and sunny place, there was a big pit. A little boy named Tom liked to play near the pit. One day, Tom lost his red ball. He was very sad.
-# Tom asked his friend, Sam, to help him search for the ball. They looked high and low, but they could not find the ball. Tom said, "I think my ball fell into the pit."
-# Sam and Tom went close to the pit. They were scared, but they wanted to find the red ball. They looked into the pit, but it was too dark to see. Tom said, "We must go in and search for my ball."
-# They went into the pit to search. It was dark and scary. They could not find the ball. They tried to get out, but the pit was too deep. Tom and Sam were stuck in the pit. They called for help, but no one could hear them. They were sad and scared, and they never got out of the pit."""
-#     pat = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
-#     bytes_dict = pre_tokenization(pat, text)
-#     for i in range(0, 6):
-#         max_pair = find_max_pair(bytes_dict)
-#         print(f"max_pair={max_pair}")
-#         bytes_dict = merge(bytes_dict, max_pair)
-#         print(f"bytes_dict={bytes_dict}")
+    time = time.time() - start
+    print(f"耗时: {time:.3f}秒")
