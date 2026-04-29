@@ -1,31 +1,77 @@
-import multiprocessing
+import cProfile
+import pstats
 import time
+from functools import wraps, lru_cache
+from io import StringIO
+
+import pathos
 import regex as re
 
 from pretokenization_example import find_chunk_boundaries
 
+# 预编译正则表达式
+PRE_TOKENIZATION_PATTERN = re.compile(
+    r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
-def pre_tokenization(pat:str,text: str):
-    bytes_dict = {}
-    for m in re.finditer(pat, text):
-        substr = m.group()
-        str_encode = tuple(c.encode() for c in substr)
-        if str_encode in bytes_dict.keys():
-            bytes_dict[str_encode] += 1
-        else:
-            bytes_dict[str_encode] = 1
-    return bytes_dict
 
-def multiprocess_pre_tokenization(text: str):
-    pat = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+def profile_section(section_name):
+    """分析函数内部特定部分的装饰器"""
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            # 创建性能分析器
+            pr = cProfile.Profile()
+            pr.enable()
+
+            result = func(*args, **kwargs)
+
+            pr.disable()
+
+            # 获取统计信息
+            s = StringIO()
+            ps = pstats.Stats(pr, stream=s)
+            ps.sort_stats('cumulative')
+
+            # 输出结果
+            print(f"\n{'=' * 50}")
+            print(f"性能分析 - {section_name}")
+            print(f"{'=' * 50}")
+            ps.print_stats(20)  # 显示前20行
+            print(s.getvalue()[:1000])  # 只显示前1000字符
+            return result
+
+        return wrapper
+
+    return decorator
+
+
+# 缓存字符编码结果
+@lru_cache(maxsize=65536)
+def _encode_char(c: str) -> bytes:
+    """缓存单个字符的编码结果"""
+    return c.encode()
+
+
+# 缓存子串编码元组
+@lru_cache(maxsize=65536)
+def _encode_tuple(substr: str) -> tuple:
+    """缓存整个子串的编码元组"""
+    return tuple(_encode_char(c) for c in substr)
+
+
+def pre_tokenization(text: str) -> dict:
+    """
+    优化版本：减少重复编码操作，使用缓存
+    """
     bytes_dict = {}
-    for m in re.finditer(pat, text):
+    # 使用预编译的正则表达式
+    for m in PRE_TOKENIZATION_PATTERN.finditer(text):
         substr = m.group()
-        str_encode = tuple(c.encode() for c in substr)
-        if str_encode in bytes_dict.keys():
-            bytes_dict[str_encode] += 1
-        else:
-            bytes_dict[str_encode] = 1
+        # 直接从缓存获取或计算编码元组
+        str_encode = _encode_tuple(substr)
+        # 更新计数
+        bytes_dict[str_encode] = bytes_dict.get(str_encode, 0) + 1
     return bytes_dict
 
 
@@ -68,13 +114,15 @@ def merge(bytes_dict: dict, max_pair: (tuple, int)):
 
 def bpe_train(input_path: str, vocab_size: int, special_tokens: list[str]):
     with open(input_path, "rb") as f:
-        num_processes = multiprocessing.cpu_count()
+        num_processes = pathos.multiprocessing.cpu_count()
         boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         vocab = {}
+        vocab_rev = set()
         merges = []
         for i in range(0, 256):
             vocab[i] = chr(i).encode()
+            vocab_rev.add(chr(i).encode())
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
@@ -83,24 +131,36 @@ def bpe_train(input_path: str, vocab_size: int, special_tokens: list[str]):
             f.seek(start)
             chunks.append(f.read(end - start).decode("utf-8", errors="ignore"))
 
-        # Run pre-tokenization on your chunk and store the counts for each pre-token
-        with multiprocessing.Pool(num_processes) as pool:
-            bytes_dict_list = pool.map(multiprocess_pre_tokenization, chunks, chunksize=1)
-        for bytes_dict in bytes_dict_list:
-            for i in range(0, 6):
-                max_pair = find_max_pair(bytes_dict)
+        bytes_dict_list = []
+        # 预编译正则表达式
+        PRE_TOKENIZATION_PATTERN = re.compile(
+            r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
-                # 添加到vocab
-                (c1, c2) = max_pair
-                merges.append(max_pair)
-                vocab[len(vocab)] = c1 + c2
-                bytes_dict = merge(bytes_dict, max_pair)
+        # 多线程：
+        # Run pre-tokenization on your chunk and store the counts for each pre-token
+        with pathos.multiprocessing.Pool(num_processes) as pool:
+            bytes_dict_list = pool.map(pre_tokenization, chunks)
+
+        # 单线程：
+        # for chunk in chunks:
+        #     bytes_dict_list.append(pre_tokenization(PRE_TOKENIZATION_PATTERN,chunk))
+        for bytes_dict in bytes_dict_list:
+            for _ in range(0, 10):
+                (c1, c2) = find_max_pair(bytes_dict)
+                new_word = c1 + c2
+                if new_word not in vocab_rev:
+                    # 添加到vocab
+                    merges.append((c1, c2))
+                    vocab[len(vocab)] = new_word
+                    vocab_rev.add(new_word)
+                bytes_dict = merge(bytes_dict, (c1, c2))
+
         return vocab, merges
 
 
 if __name__ == "__main__":
     start = time.time()
-    vocab, merges = bpe_train(r"../data/TinyStories/TinyStories-train.txt", 30000, ["<|endoftext|>"])
+    vocab, merges = bpe_train(r"../data/TinyStories/TinyStoriesV2-GPT4-train.txt", 3000, ["<|endoftext|>"])
     print(vocab)
     print(merges)
     time = time.time() - start
