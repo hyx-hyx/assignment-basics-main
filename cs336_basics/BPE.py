@@ -7,7 +7,7 @@ from io import StringIO
 import pathos
 import regex as re
 
-from pretokenization_example import find_chunk_boundaries
+from tests.adapters import run_train_bpe
 
 # 预编译正则表达式
 PRE_TOKENIZATION_PATTERN = re.compile(
@@ -68,6 +68,7 @@ def pre_tokenization(text: str) -> dict:
     # 使用预编译的正则表达式
     for m in PRE_TOKENIZATION_PATTERN.finditer(text):
         substr = m.group()
+
         # 直接从缓存获取或计算编码元组
         str_encode = _encode_tuple(substr)
         # 更新计数
@@ -81,6 +82,7 @@ def find_max_pair(bytes_dict: dict) -> (tuple, int):
     for k, v in bytes_dict.items():
         for c1, c2 in zip(k, k[1:]):
             t = tuple([c1, c2])
+
             if t in pairs.keys():
                 pairs[tuple([c1, c2])] += v
             else:
@@ -112,55 +114,9 @@ def merge(bytes_dict: dict, max_pair: (tuple, int)):
     return merged_bytes_dict
 
 
-def bpe_train(input_path: str, vocab_size: int, special_tokens: list[str]):
-    with open(input_path, "rb") as f:
-        num_processes = pathos.multiprocessing.cpu_count()
-        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
-
-        vocab = {}
-        vocab_rev = set()
-        merges = []
-        for i in range(0, 256):
-            vocab[i] = chr(i).encode()
-            vocab_rev.add(chr(i).encode())
-
-        # The following is a serial implementation, but you can parallelize this
-        # by sending each start/end pair to a set of processes.
-        chunks = []
-        for start, end in zip(boundaries[:-1], boundaries[1:]):
-            f.seek(start)
-            chunks.append(f.read(end - start).decode("utf-8", errors="ignore"))
-
-        bytes_dict_list = []
-        # 预编译正则表达式
-        PRE_TOKENIZATION_PATTERN = re.compile(
-            r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
-
-        # 多线程：
-        # Run pre-tokenization on your chunk and store the counts for each pre-token
-        with pathos.multiprocessing.Pool(num_processes) as pool:
-            bytes_dict_list = pool.map(pre_tokenization, chunks)
-
-        # 单线程：
-        # for chunk in chunks:
-        #     bytes_dict_list.append(pre_tokenization(PRE_TOKENIZATION_PATTERN,chunk))
-        for bytes_dict in bytes_dict_list:
-            for _ in range(0, 10):
-                (c1, c2) = find_max_pair(bytes_dict)
-                new_word = c1 + c2
-                if new_word not in vocab_rev:
-                    # 添加到vocab
-                    merges.append((c1, c2))
-                    vocab[len(vocab)] = new_word
-                    vocab_rev.add(new_word)
-                bytes_dict = merge(bytes_dict, (c1, c2))
-
-        return vocab, merges
-
-
 if __name__ == "__main__":
     start = time.time()
-    vocab, merges = bpe_train(r"../data/TinyStories/TinyStoriesV2-GPT4-train.txt", 3000, ["<|endoftext|>"])
+    vocab, merges = run_train_bpe(r"../data/TinyStories/TinyStoriesV2-GPT4-valid.txt", 500, ["<|endoftext|>"])
     print(vocab)
     print(merges)
     time = time.time() - start

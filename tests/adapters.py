@@ -10,9 +10,6 @@ import torch
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
-import cs336_basics.BPE
-import cs336_basics.pretokenization_example
-
 
 def run_linear(
         d_in: int,
@@ -593,16 +590,18 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
+    from cs336_basics.BPE import pre_tokenization, merge, find_max_pair
+    from cs336_basics.pretokenization_example import find_chunk_boundaries
     with open(input_path, "rb") as f:
         num_processes = multiprocessing.cpu_count()
-        boundaries = cs336_basics.find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
+        boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
 
         vocab = {}
         vocab_rev = set()
         merges = []
         for i in range(0, 256):
-            vocab[i] = chr(i).encode()
-            vocab_rev.add(chr(i).encode())
+            vocab[i] = bytes([i])
+            vocab_rev.add(bytes([i]))
 
         # The following is a serial implementation, but you can parallelize this
         # by sending each start/end pair to a set of processes.
@@ -613,16 +612,18 @@ def run_train_bpe(
 
         # Run pre-tokenization on your chunk and store the counts for each pre-token
         with multiprocessing.Pool(num_processes) as pool:
-            bytes_dict_list = pool.map(cs336_basics.multiprocess_pre_tokenization, chunks, chunksize=1)
+            bytes_dict_list = pool.map(pre_tokenization, chunks)
         for bytes_dict in bytes_dict_list:
-            for i in range(0, 10):
-                (c1, c2) = cs336_basics.find_max_pair(bytes_dict)
+            while len(vocab) < vocab_size - len(special_tokens):
+                (c1, c2) = find_max_pair(bytes_dict)
                 new_word = c1 + c2
                 if new_word not in vocab_rev:
                     # 添加到vocab
                     merges.append((c1, c2))
-                    vocab[len(vocab)] = c1 + c2
-                    vocab_rev.add(c1 + c2)
-                bytes_dict = cs336_basics.merge(bytes_dict, (c1, c2))
+                    vocab[len(vocab)] = new_word
+                    vocab_rev.add(new_word)
+                bytes_dict = merge(bytes_dict, (c1, c2))
 
+        for st in special_tokens:
+            vocab[len(vocab)] = st.encode()
         return vocab, merges
