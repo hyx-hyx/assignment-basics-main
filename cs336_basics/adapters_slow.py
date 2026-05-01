@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import multiprocessing
 import os
-from collections import defaultdict
 from collections.abc import Iterable
 from typing import IO, Any, BinaryIO
 
@@ -591,7 +590,7 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    from cs336_basics.BPE import pre_tokenization, merge
+    from cs336_basics.BPE_Slow import pre_tokenization, merge, find_max_pair
     from cs336_basics.pretokenization_example import find_chunk_boundaries
     with open(input_path, "rb") as f:
         num_processes = multiprocessing.cpu_count()
@@ -600,7 +599,6 @@ def run_train_bpe(
         vocab = {}
         vocab_rev = set()
         merges = []
-        char_dict_list = defaultdict(set)
         for i in range(0, 256):
             vocab[i] = bytes([i])
             vocab_rev.add(bytes([i]))
@@ -614,32 +612,17 @@ def run_train_bpe(
 
         # Run pre-tokenization on your chunk and store the counts for each pre-token
         with multiprocessing.Pool(num_processes) as pool:
-            multi_bytes_list, multi_value_list = zip(*pool.map(pre_tokenization, chunks))
-
-        pairs = {}
-        for i in range(0, len(multi_bytes_list)):
-            bytes_list = multi_bytes_list[i]
-            value_list = multi_value_list[i]
-            for idx, b in enumerate(bytes_list):
-                v = value_list[idx]
-                for c1, c2 in zip(b, b[1:]):
-                    t = tuple([c1, c2])
-                    pairs[t]=pairs.get(t,0) + v
-                    char_dict_list[c1].add((idx, v))
-                    char_dict_list[c2].add((idx, v))
-
+            bytes_dict_list = pool.map(pre_tokenization, chunks)
+        for bytes_dict in bytes_dict_list:
             while len(vocab) < vocab_size - len(special_tokens):
-                max_value = max(pairs.values())
-                max_pair = max([b for b, v in pairs.items() if v == max_value])
-                (c1, c2) = max_pair
+                (c1, c2) = find_max_pair(bytes_dict)
                 new_word = c1 + c2
                 if new_word not in vocab_rev:
                     # 添加到vocab
                     merges.append((c1, c2))
                     vocab[len(vocab)] = new_word
                     vocab_rev.add(new_word)
-                    bytes_list = merge(bytes_list, char_dict_list, max_pair, pairs)
-                pairs[max_pair] = 0
+                bytes_dict = merge(bytes_dict, (c1, c2))
 
         for st in special_tokens:
             vocab[len(vocab)] = st.encode()
