@@ -624,7 +624,7 @@ def run_train_bpe(
                 v = value_list[idx]
                 for c1, c2 in zip(b, b[1:]):
                     t = tuple([c1, c2])
-                    pairs[t]=pairs.get(t,0) + v
+                    pairs[t] = pairs.get(t, 0) + v
                     char_dict_list[c1].add((idx, v))
                     char_dict_list[c2].add((idx, v))
 

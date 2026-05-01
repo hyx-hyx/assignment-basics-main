@@ -7,7 +7,7 @@ from io import StringIO
 import pathos
 import regex as re
 
-from tests.adapters import run_train_bpe
+from adapters_slow import run_train_bpe
 
 # 预编译正则表达式
 PRE_TOKENIZATION_PATTERN = re.compile(
@@ -116,7 +116,7 @@ def merge(bytes_dict: dict, max_pair: (tuple, int)):
 
 if __name__ == "__main__":
     start = time.time()
-    vocab, merges = run_train_bpe(r"../data/TinyStories/TinyStoriesV2-GPT4-valid.txt", 1000, ["<|endoftext|>"])
+    vocab, merges = run_train_bpe(r"../data/TinyStories/TinyStoriesV2-GPT4-train.txt", 10000, ["<|endoftext|>"])
     print(vocab)
     print(merges)
     time = time.time() - start

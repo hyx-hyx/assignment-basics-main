@@ -98,14 +98,14 @@ def merge(bytes_list: list, char_dict_list: dict, max_pair, pairs):
             t = []
 
             # 清除这个key对应的pairs
-            clear_pairs = []
-            for index in range(0, len(k) - 1):
+            index_k_end = len(k) - 1
+            for index in range(0, index_k_end):
                 p = (k[index], k[index + 1])
                 pairs[p] -= v
                 index += 1
 
             index = 0
-            while index < len(k) - 1:
+            while index < index_k_end:
                 (c1, c2) = (k[index], k[index + 1])
                 if tuple([c1, c2]) == max_pair:
                     t.append(c1 + c2)
@@ -114,11 +114,12 @@ def merge(bytes_list: list, char_dict_list: dict, max_pair, pairs):
                     t.append(c1)
                     index += 1
 
-            if index == len(k) - 1:
+            if index == index_k_end:
                 t.append(k[index])
 
             # 添加最新的pairs
-            for index in range(0, len(t) - 1):
+            index_t_end = len(t) - 1
+            for index in range(0, index_t_end):
                 (c1, c2) = (t[index], t[index + 1])
                 pairs[(c1, c2)] = pairs.get((c1, c2), 0) + v
                 index += 1
@@ -167,8 +168,8 @@ if __name__ == "__main__":
     # print(merges)
 
     start = time.time()
-    vocab, merges = run_train_bpe(r"../data/TinyStories/TinyStoriesV2-GPT4-valid.txt", 1000, ["<|endoftext|>"])
+    vocab, merges = run_train_bpe(r"../data/TinyStories/TinyStoriesV2-GPT4-train.txt", 10000, ["<|endoftext|>"])
+    time = time.time() - start
     print(vocab)
     print(merges)
-    time = time.time() - start
     print(f"耗时: {time:.3f}秒")
