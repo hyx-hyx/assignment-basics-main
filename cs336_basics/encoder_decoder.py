@@ -47,7 +47,7 @@ if __name__ == "__main__":
             merges.append((left.encode("utf-8"), right.encode("utf-8")))
     vocab = {v: k for k, v in vocab_rev.items()}
     special_tokens = [b'<|endoftext|>']
-    in_str = "Hello, how are you?"
+    in_str = "🙃"
     output = encode(in_str)
     decode_output = decode(output)
     print(decode_output)
