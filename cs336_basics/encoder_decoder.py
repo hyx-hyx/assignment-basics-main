@@ -1,12 +1,11 @@
+import json
+
 from BPE import pre_tokenization
 
 
 def encode(text: str) -> list[int]:
-    vocab_rev = {}
     encode_list = []
-    for k, v in vocab.items():
-        vocab_rev[v] = k
-
+    text = text.replace(" ", "Ġ")
     byte_list, _ = pre_tokenization(text)
     for b in byte_list:
         if b in special_tokens:
@@ -34,18 +33,21 @@ def encode(text: str) -> list[int]:
 
 
 def decode(ids: list[int]) -> str:
-    out: str = ""
-    for i in ids:
-        out += bytes.decode(vocab[i], errors='\ufffd')
-    return out
+    text=b''.join(vocab[i] for i in ids).decode("utf-8", errors='replace')
+    return text.replace("Ġ"," ")
 
 
 if __name__ == "__main__":
-    vocab = {0: b' ', 1: b'a', 2: b'c', 3: b'e', 4: b'h', 5: b't', 6: b'th', 7: b' c', 8: b' a', 9: b'the', 10: b' at'}
-    merges = [(b't', b'h'), (b' ', b'c'), (b' ', b'a'), (b'th', b'e'), (b' a', b't')]
+    with open("../tests/fixtures/gpt2_vocab.json",'r',encoding="utf-8") as vf:
+        vocab_rev = {k.encode("utf-8"): v for k,v in json.load(vf).items()}
+    with open("../tests/fixtures/gpt2_merges.txt",'r',encoding="utf-8") as mf:
+        merges = []
+        for line in mf:
+            [left, right] = line.strip().split()
+            merges.append((left.encode("utf-8"), right.encode("utf-8")))
+    vocab = {v: k for k, v in vocab_rev.items()}
     special_tokens = [b'<|endoftext|>']
-    in_str = "the cat ate"
+    in_str = "Hello, how are you?"
     output = encode(in_str)
     decode_output = decode(output)
-    print(output)
     print(decode_output)
