@@ -39,6 +39,9 @@ class Tokenizer:
         delimiters=[]
         # 支持用户自定义special_tokens
         if self.special_tokens:
+            # 这个排序是为了解决重叠special_tokens，例如special_tokens=["<|endoftext|>", "<|endoftext|><|endoftext|>"]
+            # 优先匹配"<|endoftext|><|endoftext|>"
+            self.special_tokens=sorted(self.special_tokens,reverse=True)
             pattern = '|'.join(map(re.escape, self.special_tokens))
             delimiters = re.findall(pattern, text)
 
