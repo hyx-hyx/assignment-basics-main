@@ -4,7 +4,7 @@ from cs336_basics.module.Linear import Linear
 from tests.conftest import d_model
 
 
-class Swiglu_feed_forward(nn.Module):
+class SwigluFeedForward(nn.Module):
     def __init__(self, d_model: int, d_ff: int, device=None, dtype=None):
         super().__init__()
         self.w1 = Linear(d_model, d_ff)

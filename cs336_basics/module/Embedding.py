@@ -16,7 +16,7 @@ class Embedding(nn.Module):
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
         one_hot = np.eye(self.vocab_size)[token_ids]
-        return einsum(one_hot, self.w, "... v_size,v_size d_model -> ... d_model")
+        return einsum(one_hot, self.w.data, "... v_size,v_size d_model -> ... d_model")
 
 
 if __name__ == "__main__":

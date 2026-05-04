@@ -5,7 +5,7 @@ from einops import rearrange
 from einops import reduce
 
 
-class Rmsnorm(nn.Module):
+class RmsNorm(nn.Module):
     def __init__(self, d_model: int, eps: float = 1e-5, device=None, dtype=None):
         super().__init__()
         self.eps = eps

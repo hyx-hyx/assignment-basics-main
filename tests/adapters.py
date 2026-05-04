@@ -10,8 +10,8 @@ import numpy.typing as npt
 import torch
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
-from cs336_basics.module.Rmsnorm import Rmsnorm
-from cs336_basics.module.Swiglu_feed_forward import Swiglu_feed_forward
+from cs336_basics.module.RmsNorm import RmsNorm
+from cs336_basics.module.SwigluFeedForward import SwigluFeedForward
 from jaxtyping import Bool, Float, Int
 from torch import Tensor
 
@@ -35,15 +35,15 @@ def run_linear(
         Float[Tensor, "... d_out"]: The transformed output of your linear module.
     """
     linear = Linear(d_out, d_in)
-    linear.w = weights
+    linear.weight.data = weights
     return linear.forward(in_features)
 
 
 def run_embedding(
         vocab_size: int,
         d_model: int,
-        weights: Float[Tensor, " vocab_size d_model"],
-        token_ids: Int[Tensor, " ..."],
+        weights: Float[Tensor, "vocab_size d_model"],
+        token_ids: Int[Tensor, "..."],
 ) -> Float[Tensor, " ... d_model"]:
     """
     Given the weights of an Embedding layer, get the embeddings for a batch of token ids.
@@ -58,7 +58,7 @@ def run_embedding(
         Float[Tensor, "... d_model"]: Batch of embeddings returned by your Embedding layer.
     """
     e = Embedding(vocab_size, d_model)
-    e.w = weights
+    e.w.data = weights
     return e.forward(token_ids)
 
 
@@ -92,7 +92,7 @@ def run_swiglu(
     # swiglu.w2.weight.data = w2_weight
     # swiglu.w3.weight.data = w3_weight
 
-    swiglu = Swiglu_feed_forward(d_model, d_ff)
+    swiglu = SwigluFeedForward(d_model, d_ff)
     swiglu.w1.weight.data = w1_weight
     swiglu.w2.weight.data = w2_weight
     swiglu.w3.weight.data = w3_weight
@@ -391,8 +391,8 @@ def run_rmsnorm(
         Float[Tensor,"... d_model"]: Tensor of with the same shape as `in_features` with the output of running
         RMSNorm of the `in_features`.
     """
-    rmsnorm = Rmsnorm(d_model, eps)
-    rmsnorm.g = weights
+    rmsnorm = RmsNorm(d_model, eps)
+    rmsnorm.g.data = weights
     return rmsnorm.forward(in_features)
 
 
