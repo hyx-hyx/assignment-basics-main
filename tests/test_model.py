@@ -92,7 +92,7 @@ def test_multihead_self_attention(numpy_snapshot, in_embeddings, d_model, n_head
 
 
 def test_multihead_self_attention_with_rope(
-    numpy_snapshot, in_embeddings, d_model, n_heads, ts_state_dict, n_keys, theta, pos_ids
+        numpy_snapshot, in_embeddings, d_model, n_heads, ts_state_dict, n_keys, theta, pos_ids
 ):
     d, _ = ts_state_dict
     q_proj_weight, k_proj_weight, v_proj_weight, o_proj_weight = [
@@ -115,7 +115,7 @@ def test_multihead_self_attention_with_rope(
 
 
 def test_transformer_lm(
-    numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
+        numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
 ):
     state_dict, _ = ts_state_dict
 
@@ -134,7 +134,7 @@ def test_transformer_lm(
 
 
 def test_transformer_lm_truncated_input(
-    numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
+        numpy_snapshot, vocab_size, n_keys, d_model, n_layers, n_heads, d_ff, theta, ts_state_dict, in_indices
 ):
     in_indices_truncated = in_indices[..., : in_indices.shape[-1] // 2]
     truncated_actual_output = run_transformer_lm(
