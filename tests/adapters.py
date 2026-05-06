@@ -10,6 +10,7 @@ import numpy.typing as npt
 import torch
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
+from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
 from cs336_basics.module.RmsNorm import RmsNorm
 from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
 from cs336_basics.module.ScaledDotProductAttention import softmax, scaled_dot_product_attention
@@ -153,7 +154,12 @@ def run_multihead_self_attention(
         Float[Tensor, " ... sequence_length d_model"]: Tensor with the output of running your optimized, batched multi-headed attention
         implementation with the given QKV projection weights and input features.
     """
-    raise NotImplementedError
+    multi_head_self_attention = MultiHeadSelfAttention(d_model, num_heads)
+    multi_head_self_attention.w_q.data = q_proj_weight
+    multi_head_self_attention.w_k.data = k_proj_weight
+    multi_head_self_attention.w_v.data = v_proj_weight
+    multi_head_self_attention.w_o.data = o_proj_weight
+    return multi_head_self_attention.forward(in_features)
 
 
 def run_multihead_self_attention_with_rope(

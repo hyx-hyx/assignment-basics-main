@@ -16,7 +16,6 @@ def scaled_dot_product_attention(q: torch.Tensor, k: torch.Tensor, v: torch.Tens
     if mask is not None:
         mask = torch.where(mask, 0.0, -torch.inf)
         qkt_softmax = softmax(qkt_norm + mask, dim=-1)
-
     else:
         qkt_softmax = softmax(qkt_norm, dim=-1)
     return einsum(qkt_softmax, v, "... queries keys,... keys d_v -> ... queries d_v")
