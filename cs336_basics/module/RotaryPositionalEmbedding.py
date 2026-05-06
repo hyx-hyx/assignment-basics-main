@@ -1,8 +1,6 @@
-import numpy as np
 import torch
 import torch.nn as nn
 from einops import rearrange, einsum
-from torch.fx.experimental.unification.core import seq
 
 
 class RotaryPositionalEmbedding(nn.Module):
@@ -32,9 +30,10 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("rotate matrix", r_matrices, persistent=False)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        seq_len=token_positions.shape[-1]
+        seq_len = token_positions.shape[-1]
         one_hot = torch.eye(seq_len)[token_positions]
-        all_position_ri=einsum(self.get_buffer("rotate matrix"), one_hot, "seq_len d_k d_k_2,seq_len seq_len_col -> seq_len_col d_k d_k_2")
+        all_position_ri = einsum(self.get_buffer("rotate matrix"), one_hot,
+                                 "seq_len d_k d_k_2,seq_len seq_len_col -> seq_len_col d_k d_k_2")
         return einsum(all_position_ri, x, "seq_len_col d_k d_k_2, b seq_len_col d_k_2 -> b seq_len_col d_k")
 
 

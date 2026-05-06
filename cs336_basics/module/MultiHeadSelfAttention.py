@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import torch
 import torch.nn as nn
 from cs336_basics.module.ScaledDotProductAttention import scaled_dot_product_attention
 from einops import einsum, rearrange
+from jaxtyping import Float
+from torch import Tensor
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -15,8 +19,9 @@ class MultiHeadSelfAttention(nn.Module):
         self.d_model = d_model
         self.num_heads = num_heads
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        d_k = d_v = int(self.d_model / self.num_heads)
+    def forward(self, x: torch.Tensor,
+                rope_code: Float[Tensor, " ... sequence_length d_k"] | None = None,) -> torch.Tensor:
+        d_k = d_v = self.d_model // self.num_heads
         """
         这里可以进行代码简化：
         Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk",x, self.w_q,h=self.num_heads,dk=d_k)
