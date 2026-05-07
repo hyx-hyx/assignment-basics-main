@@ -6,7 +6,7 @@ from einops import rearrange, einsum
 class RotaryPositionalEmbedding(nn.Module):
     def __init__(self, theta: float, d_k: int, max_seq_len: int, device=None):
         super().__init__()
-        self.d_k=d_k
+        self.d_k = d_k
         idx = torch.linspace(start=0, end=max_seq_len - 1, steps=max_seq_len)
         k = torch.linspace(start=1, end=d_k / 2, steps=int(d_k / 2))
         idx = rearrange(idx, "max_seq_len -> max_seq_len 1")
@@ -35,9 +35,10 @@ class RotaryPositionalEmbedding(nn.Module):
         seq_len = token_positions.shape[-1]
 
         one_hot = torch.eye(seq_len)[token_positions]
-        all_position_ri = einsum(self.get_buffer("rotate matrix")[0:seq_len,0:self.d_k,0:self.d_k], one_hot,
+        all_position_ri = einsum(self.get_buffer("rotate matrix")[0:seq_len, 0:self.d_k, 0:self.d_k], one_hot,
                                  "seq_len d_k_row d_k_col,... seq_len seq_len_col -> ... seq_len_col d_k_row d_k_col")
-        return einsum(all_position_ri, x, "... seq_len_col d_k_row d_k_col, ... seq_len_col d_k_col -> ... seq_len_col d_k_row")
+        return einsum(all_position_ri, x,
+                      "... seq_len_col d_k_row d_k_col, ... seq_len_col d_k_col -> ... seq_len_col d_k_row")
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import einx
 import torch
 import torch.nn as nn
 from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
@@ -24,26 +25,27 @@ class MultiHeadSelfAttention(nn.Module):
                 token_positions: Int[torch.Tensor, " ... sequence_length"] | None = None) -> torch.Tensor:
         d_k = d_v = self.d_model // self.num_heads
         """
-        这里可以进行代码简化：
+        这里进行代码简化：
         Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk",x, self.w_q,h=self.num_heads,dk=d_k)
         等价于：
             Q = einsum(x, self.w_q, "... sequence_length d_model,hdk d_model -> ... sequence_length hdk")
+            # 将维度按注意力头拆分
             Q = rearrange(Q, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
         """
 
-        Q = einsum(x, self.w_q, "... sequence_length d_model,hdk d_model -> ... sequence_length hdk")
-        K = einsum(x, self.w_k, "... sequence_length d_model,hdk d_model -> ... sequence_length hdk")
-        V = einsum(x, self.w_v, "... sequence_length d_model,hdv d_model -> ... sequence_length hdv")
+        Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, self.w_q,
+                     h=self.num_heads, dk=d_k)
+        K = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, self.w_q,
+                     h=self.num_heads, dk=d_k)
+        V = einx.dot("... sequence_length d_model,(h dv) d_model -> ... h sequence_length dv", x, self.w_q,
+                     h=self.num_heads, dk=d_v)
 
-        # 这里将原来的d_model拆分为两个维度，h 和 dk/dv,便于矩阵相乘，并行计算
-        Q = rearrange(Q, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
-        K = rearrange(K, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
-        V = rearrange(V, "... sequence_length (h dv) -> ... h sequence_length dv", h=self.num_heads)
-
+        # 加上旋转位置编码
         if rope is not None:
             Q = rope.forward(Q, token_positions)
             K = rope.forward(K, token_positions)
 
+        # 添加因果掩码
         mask = torch.tril(torch.ones(x.shape[-2], x.shape[-2])).to(torch.bool)
         mask = mask[(None,)]
         multi_head = scaled_dot_product_attention(Q, K, V, mask)
@@ -51,6 +53,7 @@ class MultiHeadSelfAttention(nn.Module):
         # 多头注意力计算结果合并
         multi_head = rearrange(multi_head, "... h sequence_length dk -> ... sequence_length (h dk)")
 
+        # Wo矩阵运算
         multi_head_self_attention = einsum(multi_head, self.w_o, "... hdv, d_model hdv -> ... d_model")
 
         return multi_head_self_attention
