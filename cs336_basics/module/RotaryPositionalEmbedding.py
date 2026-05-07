@@ -31,7 +31,13 @@ class RotaryPositionalEmbedding(nn.Module):
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
         seq_len = token_positions.shape[-1]
-        one_hot = torch.eye(seq_len)[token_positions]
+        identity = torch.eye(seq_len, device=token_positions.device, dtype=token_positions.dtype)
+        # 扩展维度以匹配 token_positions 的前导维度
+        # 从 [seq_len, seq_len] -> [1, ..., 1, seq_len, seq_len]
+        # 然后通过 broadcasting 扩展到 [..., seq_len, seq_len]
+        expanded_shape = (1,) * (token_positions.dim() - 1) + (seq_len, seq_len)
+        identity_expanded = identity.view(expanded_shape)
+        one_hot = identity_expanded[:,token_positions]
         all_position_ri = einsum(self.get_buffer("rotate matrix"), one_hot,
                                  "seq_len d_k d_k_2,seq_len seq_len_col -> seq_len_col d_k d_k_2")
         return einsum(all_position_ri, x, "seq_len_col d_k d_k_2, b seq_len_col d_k_2 -> b seq_len_col d_k")
