@@ -13,6 +13,7 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
         super().__init__()
 
+        self.w={}
         self.w_q = nn.Parameter(torch.empty(d_model, d_model))
         self.w_k = nn.Parameter(torch.empty(d_model, d_model))
         self.w_v = nn.Parameter(torch.empty(d_model, d_model))
@@ -42,6 +43,8 @@ class MultiHeadSelfAttention(nn.Module):
 
         # 加上旋转位置编码
         if rope is not None:
+            if token_positions is None :
+                token_positions=torch.Tensor(list(range(0,d_k)))
             Q = rope.forward(Q, token_positions)
             K = rope.forward(K, token_positions)
 
