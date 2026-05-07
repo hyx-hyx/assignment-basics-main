@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import torch
 import torch.nn as nn
+from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
 from cs336_basics.module.ScaledDotProductAttention import scaled_dot_product_attention
 from einops import einsum, rearrange
-from jaxtyping import Float
-from torch import Tensor
+from jaxtyping import Int
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -20,7 +20,8 @@ class MultiHeadSelfAttention(nn.Module):
         self.num_heads = num_heads
 
     def forward(self, x: torch.Tensor,
-                rope_code: Float[Tensor, " ... sequence_length d_k"] | None = None,) -> torch.Tensor:
+                rope: RotaryPositionalEmbedding | None = None,
+                token_positions: Int[torch.Tensor, " ... sequence_length"] | None = None) -> torch.Tensor:
         d_k = d_v = self.d_model // self.num_heads
         """
         这里可以进行代码简化：
@@ -33,14 +34,18 @@ class MultiHeadSelfAttention(nn.Module):
         Q = einsum(x, self.w_q, "... sequence_length d_model,hdk d_model -> ... sequence_length hdk")
         K = einsum(x, self.w_k, "... sequence_length d_model,hdk d_model -> ... sequence_length hdk")
         V = einsum(x, self.w_v, "... sequence_length d_model,hdv d_model -> ... sequence_length hdv")
-        mask = torch.tril(torch.ones(x.shape[-2], x.shape[-2])).to(torch.bool)
-        mask = mask[(None,)]
 
         # 这里将原来的d_model拆分为两个维度，h 和 dk/dv,便于矩阵相乘，并行计算
-
         Q = rearrange(Q, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
         K = rearrange(K, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
         V = rearrange(V, "... sequence_length (h dv) -> ... h sequence_length dv", h=self.num_heads)
+
+        if rope is not None:
+            Q = rope.forward(Q, token_positions)
+            K = rope.forward(K, token_positions)
+
+        mask = torch.tril(torch.ones(x.shape[-2], x.shape[-2])).to(torch.bool)
+        mask = mask[(None,)]
         multi_head = scaled_dot_product_attention(Q, K, V, mask)
 
         # 多头注意力计算结果合并

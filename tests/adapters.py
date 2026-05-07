@@ -205,9 +205,8 @@ def run_multihead_self_attention_with_rope(
     multi_head_self_attention.w_v.data = v_proj_weight
     multi_head_self_attention.w_o.data = o_proj_weight
     if token_positions is not None:
-        rope = RotaryPositionalEmbedding(theta, d_model//num_heads, max_seq_len)
-        rope_code=rope.forward(in_features, token_positions)
-        return multi_head_self_attention.forward(in_features,rope_code)
+        rope = RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len)
+        return multi_head_self_attention.forward(in_features, rope, token_positions)
     else:
         return multi_head_self_attention.forward(in_features)
 
