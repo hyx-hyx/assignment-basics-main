@@ -15,7 +15,7 @@ class Embedding(nn.Module):
         init.trunc_normal_(self.w, mean=0.0, std=1, a=-3, b=3)
 
     def forward(self, token_ids: torch.Tensor) -> torch.Tensor:
-        one_hot = np.eye(self.vocab_size)[token_ids]
+        one_hot = torch.eye(self.vocab_size)[token_ids]
         return einsum(one_hot, self.w.data, "... v_size,v_size d_model -> ... d_model")
 
 
