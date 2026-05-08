@@ -13,7 +13,7 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
         super().__init__()
 
-        self.weights={}
+        self.weights = {}
         self.d_model = d_model
         self.num_heads = num_heads
 
@@ -21,11 +21,11 @@ class MultiHeadSelfAttention(nn.Module):
                 rope: RotaryPositionalEmbedding | None = None,
                 token_positions: Int[torch.Tensor, " ... sequence_length"] | None = None) -> torch.Tensor:
         d_k = d_v = self.d_model // self.num_heads
-        w_q=self.weights["attn.q_proj.weight"]
-        w_k=self.weights["attn.k_proj.weight"]
-        w_v=self.weights["attn.v_proj.weight"]
-        w_o=self.weights["attn.output_proj.weight"]
-        
+        w_q = self.weights["attn.q_proj.weight"]
+        w_k = self.weights["attn.k_proj.weight"]
+        w_v = self.weights["attn.v_proj.weight"]
+        w_o = self.weights["attn.output_proj.weight"]
+
         """
         这里进行代码简化：
         Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk",x, self.w_q,h=self.num_heads,dk=d_k)
@@ -44,10 +44,10 @@ class MultiHeadSelfAttention(nn.Module):
 
         # 加上旋转位置编码
         if rope is not None:
-            if token_positions is None :
-                seq_len=x.shape[-2]
+            if token_positions is None:
+                seq_len = x.shape[-2]
                 token_positions = torch.arange(0, seq_len, dtype=torch.long)
-            
+
             Q = rope.forward(Q, token_positions)
             K = rope.forward(K, token_positions)
 

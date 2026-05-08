@@ -4,6 +4,10 @@ from cs336_basics.module.Linear import Linear
 from tests.conftest import d_model
 
 
+def silu(x: torch.Tensor):
+    return x / (1 + torch.exp(-x))
+
+
 class SwigluFeedForward(nn.Module):
     def __init__(self, d_model: int, d_ff: int, device=None, dtype=None):
         super().__init__()
@@ -14,7 +18,7 @@ class SwigluFeedForward(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         w1x = self.w1.forward(x)
         w3x = self.w3.forward(x)
-        return self.w2.forward(w1x * torch.sigmoid(w1x) * w3x)
+        return self.w2.forward(silu(w1x) * w3x)
 
 
 if __name__ == "__main__":
