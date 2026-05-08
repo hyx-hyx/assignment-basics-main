@@ -648,7 +648,9 @@ def run_train_bpe(
         chunks = []
         for start, end in zip(boundaries[:-1], boundaries[1:]):
             f.seek(start)
-            chunks.append(f.read(end - start).decode("utf-8", errors="ignore"))
+            chunk = f.read(end - start).decode("utf-8", errors="ignore")
+            chunk = chunk.replace("<|endoftext|>", "")
+            chunks.append(chunk)
 
         # Run pre-tokenization on your chunk and store the counts for each pre-token
         with multiprocessing.Pool(num_processes) as pool:
