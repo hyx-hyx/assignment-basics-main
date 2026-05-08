@@ -16,7 +16,7 @@ class RmsNorm(nn.Module):
         in_dtype = x.dtype
         x = x.to(torch.float32)
         x_square_sum = reduce(x * x, "... d_model -> ...", "sum")
-        rms = np.pow(x_square_sum / self.d_model + self.eps, 0.5)
+        rms = torch.pow(x_square_sum / self.d_model + self.eps, 0.5)
         result = rearrange(self.g, "d_model -> 1 1 d_model") * x / rearrange(rms, "... -> ... 1")
         return result.to(in_dtype)
 

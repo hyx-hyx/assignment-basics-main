@@ -32,7 +32,7 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("rotate matrix", r_matrices, persistent=False)
 
     def forward(self, x: torch.Tensor, token_positions: torch.Tensor) -> torch.Tensor:
-        seq_len = token_positions.shape[-1]
+        seq_len = x.shape[-2]
 
         one_hot = torch.eye(seq_len)[token_positions]
         all_position_ri = einsum(self.get_buffer("rotate matrix")[0:seq_len, 0:self.d_k, 0:self.d_k], one_hot,

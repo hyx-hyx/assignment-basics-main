@@ -1,9 +1,9 @@
 import torch
 import torch.nn as nn
 from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
-from RmsNorm import RmsNorm
+from cs336_basics.module.RmsNorm import RmsNorm
 from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
-
+from cs336_basics.module.SwigluFeedForward import SwigluFeedForward
 
 class TransformerBlock(nn.Module):
     def __init__(self, d_model: int, num_heads: int, d_ff: int,
@@ -18,11 +18,26 @@ class TransformerBlock(nn.Module):
         self.weights = weights
 
     def forward(self, x: torch.Tensor):
+        
+        # first sublayer
         rms_norm=RmsNorm(self.d_model)
+        rms_norm.load_state_dict({"g": self.weights["ln1.weight"]})
+        
         multi_head_self_attention=MultiHeadSelfAttention(self.d_model,self.num_heads)
-        rope=RotaryPositionalEmbedding(self.theta,self.d_model,self.max_seq_len)
-        return x + multi_head_self_attention.forward(rms_norm.forward(x),rope)
+        multi_head_self_attention.weights={k:self.weights[k] for k in ["attn.q_proj.weight","attn.k_proj.weight","attn.v_proj.weight","attn.output_proj.weight"]}
+        
+        rope=RotaryPositionalEmbedding(self.theta,self.d_model//self.num_heads,self.max_seq_len)
+        y=x + multi_head_self_attention.forward(rms_norm.forward(x),rope)
 
+
+        # second sublayer
+        rms_norm.load_state_dict({"g": self.weights["ln2.weight"]})
+        
+        swiglu_feed_forward=SwigluFeedForward(self.d_model,self.d_ff)
+        swiglu_feed_forward.w1.weight.data = self.weights["ffn.w1.weight"]
+        swiglu_feed_forward.w2.weight.data = self.weights["ffn.w2.weight"]
+        swiglu_feed_forward.w3.weight.data = self.weights["ffn.w3.weight"]
+        return y+swiglu_feed_forward.forward(rms_norm.forward(y))
 
 class TransformerLM(nn.Module):
     def __init__(self, vocab_size: int, context_length: int, num_layers: int):

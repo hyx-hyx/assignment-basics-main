@@ -13,11 +13,7 @@ class MultiHeadSelfAttention(nn.Module):
     def __init__(self, d_model: int, num_heads: int, device=None, dtype=None):
         super().__init__()
 
-        self.w={}
-        self.w_q = nn.Parameter(torch.empty(d_model, d_model))
-        self.w_k = nn.Parameter(torch.empty(d_model, d_model))
-        self.w_v = nn.Parameter(torch.empty(d_model, d_model))
-        self.w_o = nn.Parameter(torch.empty(d_model, d_model))
+        self.weights={}
         self.d_model = d_model
         self.num_heads = num_heads
 
@@ -25,6 +21,11 @@ class MultiHeadSelfAttention(nn.Module):
                 rope: RotaryPositionalEmbedding | None = None,
                 token_positions: Int[torch.Tensor, " ... sequence_length"] | None = None) -> torch.Tensor:
         d_k = d_v = self.d_model // self.num_heads
+        w_q=self.weights["attn.q_proj.weight"]
+        w_k=self.weights["attn.k_proj.weight"]
+        w_v=self.weights["attn.v_proj.weight"]
+        w_o=self.weights["attn.output_proj.weight"]
+        
         """
         这里进行代码简化：
         Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk",x, self.w_q,h=self.num_heads,dk=d_k)
@@ -34,17 +35,19 @@ class MultiHeadSelfAttention(nn.Module):
             Q = rearrange(Q, "... sequence_length (h dk) -> ... h sequence_length dk", h=self.num_heads)
         """
 
-        Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, self.w_q,
+        Q = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, w_q,
                      h=self.num_heads, dk=d_k)
-        K = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, self.w_q,
+        K = einx.dot("... sequence_length d_model,(h dk) d_model -> ... h sequence_length dk", x, w_k,
                      h=self.num_heads, dk=d_k)
-        V = einx.dot("... sequence_length d_model,(h dv) d_model -> ... h sequence_length dv", x, self.w_q,
+        V = einx.dot("... sequence_length d_model,(h dv) d_model -> ... h sequence_length dv", x, w_v,
                      h=self.num_heads, dk=d_v)
 
         # 加上旋转位置编码
         if rope is not None:
             if token_positions is None :
-                token_positions=torch.Tensor(list(range(0,d_k)))
+                seq_len=x.shape[-2]
+                token_positions = torch.arange(0, seq_len, dtype=torch.long)
+            
             Q = rope.forward(Q, token_positions)
             K = rope.forward(K, token_positions)
 
@@ -57,7 +60,7 @@ class MultiHeadSelfAttention(nn.Module):
         multi_head = rearrange(multi_head, "... h sequence_length dk -> ... sequence_length (h dk)")
 
         # Wo矩阵运算
-        multi_head_self_attention = einsum(multi_head, self.w_o, "... hdv, d_model hdv -> ... d_model")
+        multi_head_self_attention = einsum(multi_head, w_o, "... hdv, d_model hdv -> ... d_model")
 
         return multi_head_self_attention
 
