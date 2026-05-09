@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+
 from cs336_basics.module.Linear import Linear
 from tests.conftest import d_model
 

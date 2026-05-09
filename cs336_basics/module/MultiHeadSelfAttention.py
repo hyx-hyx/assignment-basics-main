@@ -3,10 +3,13 @@ from __future__ import annotations
 import einx
 import torch
 import torch.nn as nn
-from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
-from cs336_basics.module.ScaledDotProductAttention import scaled_dot_product_attention
 from einops import einsum, rearrange
 from jaxtyping import Int
+
+from cs336_basics.module.RotaryPositionalEmbedding import \
+    RotaryPositionalEmbedding
+from cs336_basics.module.ScaledDotProductAttention import \
+    scaled_dot_product_attention
 
 
 class MultiHeadSelfAttention(nn.Module):
@@ -57,10 +60,12 @@ class MultiHeadSelfAttention(nn.Module):
         multi_head = scaled_dot_product_attention(Q, K, V, mask)
 
         # 多头注意力计算结果合并
-        multi_head = rearrange(multi_head, "... h sequence_length dk -> ... sequence_length (h dk)")
+        multi_head = rearrange(
+            multi_head, "... h sequence_length dk -> ... sequence_length (h dk)")
 
         # Wo矩阵运算
-        multi_head_self_attention = einsum(multi_head, w_o, "... hdv, d_model hdv -> ... d_model")
+        multi_head_self_attention = einsum(
+            multi_head, w_o, "... hdv, d_model hdv -> ... d_model")
 
         return multi_head_self_attention
 

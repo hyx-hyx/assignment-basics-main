@@ -8,16 +8,21 @@ from typing import IO, Any, BinaryIO
 
 import numpy.typing as npt
 import torch
+from jaxtyping import Bool, Float, Int
+from torch import Tensor
+
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
 from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
 from cs336_basics.module.RmsNorm import RmsNorm
-from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
-from cs336_basics.module.ScaledDotProductAttention import softmax, scaled_dot_product_attention
+from cs336_basics.module.RotaryPositionalEmbedding import \
+    RotaryPositionalEmbedding
+from cs336_basics.module.ScaledDotProductAttention import (
+    scaled_dot_product_attention, softmax)
 from cs336_basics.module.SwigluFeedForward import SwigluFeedForward, silu
 from cs336_basics.module.TransformerLM import TransformerLM
-from jaxtyping import Bool, Float, Int
-from torch import Tensor
+from cs336_basics.utils import cross_entropy
+from cs336_basics.utils.cross_entropy import eval_cross_entropy
 
 
 def run_linear(
@@ -207,7 +212,8 @@ def run_multihead_self_attention_with_rope(
     multi_head_self_attention.weights["attn.output_proj.weight"] = o_proj_weight
 
     if token_positions is not None:
-        rope = RotaryPositionalEmbedding(theta, d_model // num_heads, max_seq_len)
+        rope = RotaryPositionalEmbedding(
+            theta, d_model // num_heads, max_seq_len)
         return multi_head_self_attention.forward(in_features, rope, token_positions)
     else:
         return multi_head_self_attention.forward(in_features)
@@ -306,7 +312,8 @@ def run_transformer_block(
         Float[Tensor, "batch sequence_length d_model"] Tensor with the output of
         running the Transformer block on the input features while using RoPE.
     """
-    transform_block = TransformerLM.TransformerBlock(d_model, num_heads, d_ff, max_seq_len, theta)
+    transform_block = TransformerLM.TransformerBlock(
+        d_model, num_heads, d_ff, max_seq_len, theta)
     transform_block.weights = weights
     return transform_block.forward(in_features)
 
@@ -488,7 +495,7 @@ def run_cross_entropy(
     Returns:
         Float[Tensor, ""]: The average cross-entropy loss across examples.
     """
-    raise NotImplementedError
+    return eval_cross_entropy(inputs, targets)
 
 
 def run_gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: float) -> None:
@@ -629,7 +636,7 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    from cs336_basics.BPE import pre_tokenization, merge
+    from cs336_basics.BPE import merge, pre_tokenization
     from cs336_basics.pretokenization_example import find_chunk_boundaries
     with open(input_path, "rb") as f:
         num_processes = multiprocessing.cpu_count()
@@ -654,7 +661,8 @@ def run_train_bpe(
 
         # Run pre-tokenization on your chunk and store the counts for each pre-token
         with multiprocessing.Pool(num_processes) as pool:
-            multi_bytes_list, multi_value_list = zip(*pool.map(pre_tokenization, chunks))
+            multi_bytes_list, multi_value_list = zip(
+                *pool.map(pre_tokenization, chunks))
 
         pairs = {}
         for i in range(0, len(multi_bytes_list)):
@@ -678,7 +686,8 @@ def run_train_bpe(
                     merges.append((c1, c2))
                     vocab[len(vocab)] = new_word
                     vocab_rev.add(new_word)
-                    bytes_list = merge(bytes_list, char_dict_list, max_pair, pairs)
+                    bytes_list = merge(
+                        bytes_list, char_dict_list, max_pair, pairs)
                 pairs[max_pair] = 0
 
         for st in special_tokens:
