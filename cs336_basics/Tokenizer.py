@@ -2,7 +2,7 @@ import json
 import re
 from typing import Iterable, Iterator
 
-from cs336_basics.BPE import _encode_tuple, PRE_TOKENIZATION_PATTERN
+from cs336_basics.BPE import BpeTrain,_encode_tuple
 
 
 class Tokenizer:
@@ -111,7 +111,7 @@ class Tokenizer:
         """
         pre_tokenization_text = []
         # 使用预编译的正则表达式
-        for m in PRE_TOKENIZATION_PATTERN.finditer(text):
+        for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(text):
             substr = m.group()
             # 直接从缓存获取或计算编码元组
             str_encode = _encode_tuple(substr)
