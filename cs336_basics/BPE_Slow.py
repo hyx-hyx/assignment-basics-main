@@ -4,9 +4,7 @@ import time
 from functools import wraps, lru_cache
 from io import StringIO
 
-import pathos
 import regex as re
-
 from adapters_slow import run_train_bpe
 
 # 预编译正则表达式
