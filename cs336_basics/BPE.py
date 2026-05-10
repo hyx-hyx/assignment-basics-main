@@ -50,7 +50,7 @@ def profile_section(section_name):
 @lru_cache(maxsize=65536)
 def _encode_char(c: str) -> bytes:
     """缓存单个字符的编码结果"""
-    return c.encode()
+    return c.encode(encoding="utf-8")
 
 
 # 缓存子串编码元组
@@ -197,12 +197,29 @@ class BpeTrain():
 
 
 if __name__ == "__main__":
-    start = time.time()
-    FIXTURES_PATH = (pathlib.Path(__file__).resolve().parent.parent) / "./tests/fixtures"
-    input_path = FIXTURES_PATH / "tinystories_sample_5M.txt"
-    trainer = BpeTrain(input_path, 1000, ["<|endoftext|>"])
-    vocab, merges = trainer.train()
-    time = time.time() - start
-    print(vocab)
-    print(merges)
-    print(f"耗时: {time:.3f}秒")
+    # start = time.time()
+    # FIXTURES_PATH = (pathlib.Path(__file__).resolve().parent.parent) / "./tests/fixtures"
+    # input_path = FIXTURES_PATH / "tinystories_sample_5M.txt"
+    # trainer = BpeTrain(input_path, 1000, ["<|endoftext|>"])
+    # vocab, merges = trainer.train()
+    # time = time.time() - start
+    # print(vocab)
+    # print(merges)
+    # print(f"耗时: {time:.3f}秒")
+
+    test_string = "hello! こんにちは!"
+    PRE_TOKENIZATION_PATTERN = re.compile(
+        r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    bytes_dict = {}
+    # 使用预编译的正则表达式
+    for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(test_string):
+        substr = m.group()
+
+        # 直接从缓存获取或计算编码元组
+        str_encode = _encode_tuple(substr)
+        # 更新计数
+        bytes_dict[str_encode] = bytes_dict.get(str_encode, 0) + 1
+    print(bytes_dict)
+    for k in bytes_dict:
+        if b'\xe3' in k:
+            print(k)
