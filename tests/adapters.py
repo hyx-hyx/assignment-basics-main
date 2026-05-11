@@ -6,20 +6,23 @@ from typing import IO, Any, BinaryIO
 
 import numpy.typing as npt
 import torch
+from jaxtyping import Bool, Float, Int
+from torch import Tensor
+from torch.optim import AdamW
+
+import cs336_basics
+import cs336_basics.optimizer
+import cs336_basics.optimizer.AdamW
 from cs336_basics.BPE import BpeTrain
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
 from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
 from cs336_basics.module.RmsNorm import RmsNorm
-from cs336_basics.module.RotaryPositionalEmbedding import \
-    RotaryPositionalEmbedding
-from cs336_basics.module.ScaledDotProductAttention import (
-    scaled_dot_product_attention, softmax)
+from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
+from cs336_basics.module.ScaledDotProductAttention import scaled_dot_product_attention, softmax
 from cs336_basics.module.SwigluFeedForward import SwigluFeedForward, silu
 from cs336_basics.module.TransformerLM import TransformerLM
 from cs336_basics.utils.cross_entropy import eval_cross_entropy
-from jaxtyping import Bool, Float, Int
-from torch import Tensor
 
 
 def run_linear(
@@ -511,7 +514,7 @@ def get_adamw_cls() -> Any:
     """
     Returns a torch.optim.Optimizer that implements AdamW.
     """
-    raise NotImplementedError
+    return cs336_basics.optimizer.AdamW.AdamW
 
 
 def run_get_lr_cosine_schedule(
@@ -633,5 +636,5 @@ def run_train_bpe(
                 representing that <token1> was merged with <token2>.
                 Merges are ordered by order of creation.
     """
-    trainer = BpeTrain(input_path,vocab_size,special_tokens)
+    trainer = BpeTrain(input_path, vocab_size, special_tokens)
     return trainer.train()
