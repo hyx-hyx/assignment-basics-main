@@ -3,12 +3,9 @@ from __future__ import annotations
 import os
 from collections.abc import Iterable
 from typing import IO, Any, BinaryIO
-
+import numpy as np
 import numpy.typing as npt
 import torch
-from jaxtyping import Bool, Float, Int
-from torch import Tensor
-
 from cs336_basics.BPE import BpeTrain
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
@@ -21,6 +18,9 @@ from cs336_basics.module.TransformerLM import TransformerLM
 from cs336_basics.optimizer import AdamW, learning_rate_schedule
 from cs336_basics.utils.cross_entropy import eval_cross_entropy
 from cs336_basics.utils.gradient_clipping import gradient_clipping
+from data.DataLoading import data_loading
+from jaxtyping import Bool, Float, Int
+from torch import Tensor
 
 
 def run_linear(
@@ -459,7 +459,12 @@ def run_get_batch(
         is the sampled input sequences, and the second tuple item is the corresponding
         language modeling labels.
     """
-    raise NotImplementedError
+    all_batches = list(data_loading(dataset, batch_size, context_length, device))
+    # 随机选择一个
+    idx = np.random.randint(0, len(all_batches))
+    return all_batches[idx]
+
+
 
 
 def run_softmax(in_features: Float[Tensor, " ..."], dim: int) -> Float[Tensor, " ..."]:
@@ -540,7 +545,8 @@ def run_get_lr_cosine_schedule(
     Returns:
         Learning rate at the given iteration under the specified schedule.
     """
-    return learning_rate_schedule.learning_rate_schedule(it, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
+    return learning_rate_schedule.learning_rate_schedule(it, max_learning_rate, min_learning_rate, warmup_iters,
+                                                         cosine_cycle_iters)
 
 
 def run_save_checkpoint(
