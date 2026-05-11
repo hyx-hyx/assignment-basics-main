@@ -12,6 +12,5 @@ def gradient_clipping(parameters: Iterable[torch.nn.Parameter], max_l2_norm: flo
     for p in parameters:
         if p.grad is not None:
             if l2_norm_square > max_l2_norm**2:
-                p.grad.data = grad * \
-                    torch.Tensor([max_l2_norm]) / \
-                    (torch.sqrt(l2_norm_square)+1e-6)
+                p.grad.data.mul_(
+                    max_l2_norm / (torch.sqrt(l2_norm_square)+1e-6))
