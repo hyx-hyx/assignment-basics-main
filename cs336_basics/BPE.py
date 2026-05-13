@@ -3,9 +3,7 @@ from __future__ import annotations
 import cProfile
 import multiprocessing
 import os
-import pathlib
 import pstats
-import time
 from collections import defaultdict
 from functools import wraps, lru_cache
 from io import StringIO
@@ -50,7 +48,7 @@ def profile_section(section_name):
 @lru_cache(maxsize=65536)
 def _encode_char(c: str) -> bytes:
     """缓存单个字符的编码结果"""
-    return c.encode(encoding="utf-8")
+    return c.encode(encoding="utf-8", errors="surrogateescape")
 
 
 # 缓存子串编码元组
@@ -71,18 +69,23 @@ class BpeTrain():
         self.special_tokens = special_tokens
 
     def _pre_tokenization(self, text: str):
-        """
-        优化版本：减少重复编码操作，使用缓存
-        """
         bytes_dict = {}
         # 使用预编译的正则表达式
         for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(text):
             substr = m.group()
 
-            # 直接从缓存获取或计算编码元组
-            str_encode = _encode_tuple(substr)
+            # 修改：确保使用正确的编码
+            try:
+                # 先尝试正常编码
+                byte_seq = substr.encode("utf-8")
+            except UnicodeEncodeError:
+                # 如果有代理字符，使用 surrogateescape
+                byte_seq = substr.encode("utf-8", errors="surrogateescape")
+
+            # 将字节序列转换为元组
+            byte_tuple = tuple(bytes([b]) for b in byte_seq)
             # 更新计数
-            bytes_dict[str_encode] = bytes_dict.get(str_encode, 0) + 1
+            bytes_dict[byte_tuple] = bytes_dict.get(byte_tuple, 0) + 1
         return bytes_dict
 
     def _merge(self, bytes_list: list, char_dict_list: dict, max_pair, pairs):
