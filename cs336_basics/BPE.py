@@ -4,8 +4,10 @@ import cProfile
 import multiprocessing
 import os
 import pstats
+import time
+import pathlib
 from collections import defaultdict
-from functools import wraps, lru_cache
+from functools import wraps
 from io import StringIO
 
 import regex as re
@@ -44,21 +46,78 @@ def profile_section(section_name):
     return decorator
 
 
-# 缓存字符编码结果
-@lru_cache(maxsize=65536)
-def _encode_char(c: str) -> bytes:
-    """缓存单个字符的编码结果"""
-    return c.encode(encoding="utf-8", errors="surrogateescape")
+def pre_tokenization(text: str):
+    bytes_dict = {}
+    # 使用预编译的正则表达式
+    for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(text):
+        substr = m.group()
+
+        # 修改：确保使用正确的编码
+        try:
+            # 先尝试正常编码
+            byte_seq = substr.encode("utf-8")
+        except UnicodeEncodeError:
+            # 如果有代理字符，使用 surrogateescape
+            byte_seq = substr.encode("utf-8", errors="surrogateescape")
+
+        # 将字节序列转换为元组
+        byte_tuple = tuple(bytes([b]) for b in byte_seq)
+        # 更新计数
+        bytes_dict[byte_tuple] = bytes_dict.get(byte_tuple, 0) + 1
+    return bytes_dict
 
 
-# 缓存子串编码元组
-@lru_cache(maxsize=65536)
-def _encode_tuple(substr: str) -> tuple:
-    """缓存整个子串的编码元组"""
-    return tuple(_encode_char(c) for c in substr)
+def merge(bytes_list: list, char_dict_list: dict, max_pair, pairs):
+    # merge
+    max_c1, max_c2 = max_pair
+
+    # 获取所有需要查询的单个字节键
+    keys = [bytes([b]) for b in (max_c1 + max_c2)]
+    # 获取所有对应的集合
+    sets = [char_dict_list.get(key, set()) for key in keys]
+    # 计算交集
+    if sets:
+        re_pair_bytes_list = set.intersection(*sets)
+    else:
+        re_pair_bytes_list = set()
+
+    for key in re_pair_bytes_list:
+        idx, v = key
+        k = bytes_list[idx]
+        key_str = b''.join(k)
+        c1_c2_str = b''.join([max_c1, max_c2])
+        if c1_c2_str in key_str:
+            t = []
+
+            # 清除这个key对应的pairs
+            index_k_end = len(k) - 1
+            for index in range(0, index_k_end):
+                p = (k[index], k[index + 1])
+                pairs[p] -= v
+
+            index = 0
+            while index < index_k_end:
+                (c1, c2) = (k[index], k[index + 1])
+                if tuple([c1, c2]) == max_pair:
+                    t.append(c1 + c2)
+                    index += 2
+                else:
+                    t.append(c1)
+                    index += 1
+
+            if index == index_k_end:
+                t.append(k[index])
+
+            # 添加最新的pairs
+            index_t_end = len(t) - 1
+            for index in range(0, index_t_end):
+                (c1, c2) = (t[index], t[index + 1])
+                pairs[(c1, c2)] = pairs.get((c1, c2), 0) + v
+            bytes_list[idx] = tuple(t)
+    return bytes_list
 
 
-class BpeTrain():
+class BpeTrain:
     # 静态变量 预编译正则表达式
     PRE_TOKENIZATION_PATTERN = re.compile(
         r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
@@ -68,77 +127,7 @@ class BpeTrain():
         self.vocab_size = vocab_size
         self.special_tokens = special_tokens
 
-    def _pre_tokenization(self, text: str):
-        bytes_dict = {}
-        # 使用预编译的正则表达式
-        for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(text):
-            substr = m.group()
-
-            # 修改：确保使用正确的编码
-            try:
-                # 先尝试正常编码
-                byte_seq = substr.encode("utf-8")
-            except UnicodeEncodeError:
-                # 如果有代理字符，使用 surrogateescape
-                byte_seq = substr.encode("utf-8", errors="surrogateescape")
-
-            # 将字节序列转换为元组
-            byte_tuple = tuple(bytes([b]) for b in byte_seq)
-            # 更新计数
-            bytes_dict[byte_tuple] = bytes_dict.get(byte_tuple, 0) + 1
-        return bytes_dict
-
-    def _merge(self, bytes_list: list, char_dict_list: dict, max_pair, pairs):
-        # merge
-        max_c1, max_c2 = max_pair
-
-        # 获取所有需要查询的单个字节键
-        keys = [bytes([b]) for b in (max_c1 + max_c2)]
-        # 获取所有对应的集合
-        sets = [char_dict_list.get(key, set()) for key in keys]
-        # 计算交集
-        if sets:
-            re_pair_bytes_list = set.intersection(*sets)
-        else:
-            re_pair_bytes_list = set()
-
-        for key in re_pair_bytes_list:
-            idx, v = key
-            k = bytes_list[idx]
-            key_str = b''.join(k)
-            c1_c2_str = b''.join([max_c1, max_c2])
-            if c1_c2_str in key_str:
-                t = []
-
-                # 清除这个key对应的pairs
-                index_k_end = len(k) - 1
-                for index in range(0, index_k_end):
-                    p = (k[index], k[index + 1])
-                    pairs[p] -= v
-
-                index = 0
-                while index < index_k_end:
-                    (c1, c2) = (k[index], k[index + 1])
-                    if tuple([c1, c2]) == max_pair:
-                        t.append(c1 + c2)
-                        index += 2
-                    else:
-                        t.append(c1)
-                        index += 1
-
-                if index == index_k_end:
-                    t.append(k[index])
-
-                # 添加最新的pairs
-                index_t_end = len(t) - 1
-                for index in range(0, index_t_end):
-                    (c1, c2) = (t[index], t[index + 1])
-                    pairs[(c1, c2)] = pairs.get((c1, c2), 0) + v
-                bytes_list[idx] = tuple(t)
-        return bytes_list
-
     def train(self):
-
         with open(self.input_path, "rb") as f:
             num_processes = multiprocessing.cpu_count()
             boundaries = find_chunk_boundaries(f, num_processes, b"<|endoftext|>")
@@ -160,7 +149,7 @@ class BpeTrain():
 
             # Run pre-tokenization on your chunk and store the counts for each pre-token
             with multiprocessing.Pool(num_processes) as pool:
-                multi_bytes_dict = pool.map(self._pre_tokenization, chunks)
+                multi_bytes_dict = pool.map(pre_tokenization, chunks)
 
             # 这里先把所有的分块bytes_list进行合并，统计整体的pre_token的出现次数
             result = defaultdict(int)
@@ -191,7 +180,7 @@ class BpeTrain():
                     merges.append((c1, c2))
                     vocab[len(vocab)] = new_word
                     vocab_rev.add(new_word)
-                    bytes_list = self._merge(bytes_list, char_dict_list, max_pair, pairs)
+                    bytes_list = merge(bytes_list, char_dict_list, max_pair, pairs)
                 pairs[max_pair] = 0
 
             for st in self.special_tokens:
@@ -200,29 +189,12 @@ class BpeTrain():
 
 
 if __name__ == "__main__":
-    # start = time.time()
-    # FIXTURES_PATH = (pathlib.Path(__file__).resolve().parent.parent) / "./tests/fixtures"
-    # input_path = FIXTURES_PATH / "tinystories_sample_5M.txt"
-    # trainer = BpeTrain(input_path, 1000, ["<|endoftext|>"])
-    # vocab, merges = trainer.train()
-    # time = time.time() - start
-    # print(vocab)
-    # print(merges)
-    # print(f"耗时: {time:.3f}秒")
-
-    test_string = "hello! こんにちは!"
-    PRE_TOKENIZATION_PATTERN = re.compile(
-        r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
-    bytes_dict = {}
-    # 使用预编译的正则表达式
-    for m in BpeTrain.PRE_TOKENIZATION_PATTERN.finditer(test_string):
-        substr = m.group()
-
-        # 直接从缓存获取或计算编码元组
-        str_encode = _encode_tuple(substr)
-        # 更新计数
-        bytes_dict[str_encode] = bytes_dict.get(str_encode, 0) + 1
-    print(bytes_dict)
-    for k in bytes_dict:
-        if b'\xe3' in k:
-            print(k)
+    start = time.time()
+    FIXTURES_PATH = pathlib.Path(__file__).resolve().parent.parent / "./tests/fixtures"
+    input_path = FIXTURES_PATH / "tinystories_sample_5M.txt"
+    trainer = BpeTrain(input_path, 1000, ["<|endoftext|>"])
+    vocab, merges = trainer.train()
+    time = time.time() - start
+    print(vocab)
+    print(merges)
+    print(f"耗时: {time:.3f}秒")

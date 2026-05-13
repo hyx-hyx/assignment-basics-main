@@ -1,8 +1,23 @@
 import json
 import re
+from functools import lru_cache
 from typing import Iterable, Iterator
 
-from cs336_basics.BPE import BpeTrain,_encode_tuple
+from cs336_basics.BPE import BpeTrain
+
+
+# 缓存字符编码结果
+@lru_cache(maxsize=65536)
+def _encode_char(c: str) -> bytes:
+    """缓存单个字符的编码结果"""
+    return c.encode(encoding="utf-8", errors="surrogateescape")
+
+
+# 缓存子串编码元组
+@lru_cache(maxsize=65536)
+def _encode_tuple(substr: str) -> tuple:
+    """缓存整个子串的编码元组"""
+    return tuple(_encode_char(c) for c in substr)
 
 
 class Tokenizer:
