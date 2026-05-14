@@ -1,36 +1,23 @@
 from __future__ import annotations
 
-import math
 import os
-from collections.abc import Iterable
-from typing import IO, Any, BinaryIO
+from typing import IO, BinaryIO
 
 import numpy as np
-import numpy.typing as npt
 import torch
-from jaxtyping import Bool, Float, Int
-from torch import Tensor, special
-
 from cs336_basics.BPE import BpeTrain
-from cs336_basics.data.DataLoading import data_loading
-from cs336_basics.module.Embedding import Embedding
-from cs336_basics.module.Linear import Linear
-from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
-from cs336_basics.module.RmsNorm import RmsNorm
-from cs336_basics.module.RotaryPositionalEmbedding import RotaryPositionalEmbedding
-from cs336_basics.module.ScaledDotProductAttention import scaled_dot_product_attention, softmax
-from cs336_basics.module.SwigluFeedForward import SwigluFeedForward, silu
-from cs336_basics.module.TransformerLM import TransformerLM
-from cs336_basics.optimizer import learning_rate_schedule
-from cs336_basics.optimizer.AdamW import AdamW
-from cs336_basics.serialization.checkpoint import load_checkpoint, save_checkpoint
 from cs336_basics.Tokenizer import Tokenizer
+from cs336_basics.data.DataLoading import data_loading
+from cs336_basics.module.ScaledDotProductAttention import softmax
+from cs336_basics.module.TransformerLM import TransformerLM
+from cs336_basics.optimizer.AdamW import AdamW
+from cs336_basics.optimizer.learning_rate_schedule import learning_rate_schedule
+from cs336_basics.serialization.checkpoint import load_checkpoint, save_checkpoint
 from cs336_basics.utils.cross_entropy import eval_cross_entropy
 from cs336_basics.utils.gradient_clipping import gradient_clipping
-from tests.conftest import d_model, vocab_size
 
 
-class TransfomerTrainer:
+class TransformerTrainer:
     def __init__(self, model_config, optimizer_config, device):
         self.model = self._set_model(model_config)
         self.optimizer = self._set_adamw(optimizer_config)
@@ -83,10 +70,10 @@ class TransfomerTrainer:
 
         # Step 2: Tokenization
         print("Step 2: Tokenizing text...")
-        self.tokenizer = Tokenizer(vocab, merge, ["<|endoftext|>"])
+        tokenizer = Tokenizer(vocab, merge, ["<|endoftext|>"])
         token_ids = []
         with open(input_path, 'r') as f:
-            for id in self.tokenizer.encode_iterable(f):
+            for id_ in tokenizer.encode_iterable(f):
                 token_ids.append(id)
 
         # 保存为 numpy 数组
@@ -124,7 +111,6 @@ class TransfomerTrainer:
 
         for _ in range(num_epochs):
             # 数据加载
-            self.current_iter += 1
             data_param_list = ["batch_size", "context_length", "device"]
             # data
             batch_size, context_length, device = [
@@ -133,15 +119,17 @@ class TransfomerTrainer:
                                 context_length, device)
 
             self.train_epoch(x, y)
-            # self.evaluate()
-            if out_checkpoint_dir:
+            self.evaluate()
+            self.current_iter += 1
+            if out_checkpoint_dir and self.current_iter % save_interval == 0:
                 save_checkpoint(self.model, self.optimizer,
                                 self.current_iter, out_checkpoint_dir)
             else:
                 print("未设置checkpoint的保存地址!!")
 
             # 学习率调整
-            max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters = scheduler_config["max_learning_rate"], scheduler_config[
+            max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters = scheduler_config[
+                "max_learning_rate"], scheduler_config[
                 "min_learning_rate"], scheduler_config["warmup_iters"], scheduler_config["cosine_cycle_iters"]
             current_lr = learning_rate_schedule(
                 self.current_iter, max_learning_rate, min_learning_rate, warmup_iters, cosine_cycle_iters)
@@ -150,7 +138,6 @@ class TransfomerTrainer:
 
     def train_epoch(self, batch_x, batch_y):
         # 单个 epoch 的训练逻辑
-
         # 前向传播
         y_prime = self.model.forward(batch_x)
         # 计算损失
@@ -162,33 +149,47 @@ class TransfomerTrainer:
         # optimizer
         self.optimizer.step(loss.backward)
 
+    def decode(self, vocab_rev: dict, input_seq, max_tokens: int, temperature: float, threshold: float):
+        gen_token = 0
+        gen_result = ""
+        y = ""
+        while y != "<|endoftext|>" and gen_token <= max_tokens:
+            return_tensor = self.model.forward(input_seq)
+            return_tensor /= temperature
+            return_tensor = torch.where(return_tensor < threshold, torch.zeros_like(return_tensor), return_tensor)
+            return_tensor = softmax(return_tensor / temperature, dim=0)
+            y = vocab_rev[torch.argmax(return_tensor, dim=0)]
+            gen_result += y
+            input_seq += y
+            gen_token += 1
+
 
 if __name__ == "__main__":
     config = {
         # ========== 模型架构参数 ==========
         "model": {
-            "d_model": 512,           # 模型维度
-            "num_heads": 8,           # 注意力头数
-            "d_ff": 2048,             # 前馈网络维度
-            "num_layers": 6,          # Transformer 层数
-            "rope_theta": 10000.0,    # RoPE 的 theta 参数
-            "vocab_size": 50000,      # 词汇表大小
-            "context_length": 1024,   # 上下文长度
+            "d_model": 512,  # 模型维度
+            "num_heads": 16,  # 注意力头数
+            "d_ff": 1344,  # 前馈网络维度
+            "num_layers": 4,  # Transformer 层数
+            "rope_theta": 10000.0,  # RoPE 的 theta 参数
+            "vocab_size": 50000,  # 词汇表大小
+            "context_length": 1024,  # 上下文长度
         },
 
         # ========== 数据参数 ==========
         "data": {
-            "batch_size": 32,         # batch 大小
-            "context_length": 1024,   # 序列长度（与模型一致）
-            "device": "cuda",         # 训练设备
+            "batch_size": 32,  # batch 大小
+            "context_length": 256,  # 序列长度（与模型一致）
+            "device": "cuda",  # 训练设备
         },
 
         # ========== 优化器参数 ==========
         "optimizer": {
-            "learning_rate": 3e-4,    # 学习率
-            "weight_decay": 0.01,     # 权重衰减
-            "betas": (0.9, 0.999),    # AdamW 的 beta 参数
-            "eps": 1e-8,              # AdamW 的 epsilon
+            "learning_rate": 3e-4,  # 学习率
+            "weight_decay": 0.01,  # 权重衰减
+            "betas": (0.9, 0.999),  # AdamW 的 beta 参数
+            "eps": 1e-8,  # AdamW 的 epsilon
         },
 
         # ========== 学习率调度参数 ==========
@@ -209,10 +210,12 @@ if __name__ == "__main__":
 
         # ========== BPE 训练参数（预处理用）==========
         "bpe": {
-            "vocab_size": 50000,
+            "vocab_size": 10000,
             "special_tokens": ["<|endoftext|>"],
         },
     }
-    tt = TransfomerTrainer(config, "cuda")
-    tt.prepare_data()
+    tt = TransformerTrainer(config, "cuda")
+    vocab, merge = tt.prepare_data()
+    vocab_rev = {v: k for k, v in vocab.items()}
     tt.train()
+    tt.decode(vocab_rev, input_seq=[1, 23], max_tokens=1, temperature=2, threshold=0.01)
