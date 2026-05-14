@@ -2,6 +2,7 @@ import re
 
 import torch
 import torch.nn as nn
+
 from cs336_basics.module.Embedding import Embedding
 from cs336_basics.module.Linear import Linear
 from cs336_basics.module.MultiHeadSelfAttention import MultiHeadSelfAttention
@@ -28,13 +29,16 @@ class TransformerLM(nn.Module):
             rms_norm = RmsNorm(self.d_model)
             rms_norm.load_state_dict({"g": self.weights["ln1.weight"]})
 
-            multi_head_self_attention = MultiHeadSelfAttention(self.d_model, self.num_heads)
+            multi_head_self_attention = MultiHeadSelfAttention(
+                self.d_model, self.num_heads)
             multi_head_self_attention.weights = {k: self.weights[k] for k in
                                                  ["attn.q_proj.weight", "attn.k_proj.weight", "attn.v_proj.weight",
                                                   "attn.output_proj.weight"]}
 
-            rope = RotaryPositionalEmbedding(self.theta, self.d_model // self.num_heads, self.max_seq_len)
-            y = x + multi_head_self_attention.forward(rms_norm.forward(x), rope)
+            rope = RotaryPositionalEmbedding(
+                self.theta, self.d_model // self.num_heads, self.max_seq_len)
+            y = x + \
+                multi_head_self_attention.forward(rms_norm.forward(x), rope)
 
             # second sublayer
             rms_norm.load_state_dict({"g": self.weights["ln2.weight"]})
@@ -46,8 +50,8 @@ class TransformerLM(nn.Module):
             return y + swiglu_feed_forward.forward(rms_norm.forward(y))
 
     def __init__(self, d_model: int, num_heads: int, d_ff: int,
-                 theta: float, weights: dict[str, torch.Tensor],
-                 vocab_size: int, context_length: int, num_layers: int):
+                 theta: float, vocab_size: int, context_length: int, num_layers: int,
+                 weights: dict[str, torch.Tensor] = None):
         super().__init__()
         self.vocab_size = vocab_size
         self.context_length = context_length
@@ -57,17 +61,11 @@ class TransformerLM(nn.Module):
         self.d_model = d_model
 
         for i in range(0, num_layers):
-            weight_str_list = ["layers." + str(i) + ".attn.q_proj.weight"
-                , "layers." + str(i) + ".attn.k_proj.weight"
-                , "layers." + str(i) + ".attn.v_proj.weight"
-                , "layers." + str(i) + ".attn.output_proj.weight"
-                , "layers." + str(i) + ".ln1.weight"
-                , "layers." + str(i) + ".ffn.w1.weight"
-                , "layers." + str(i) + ".ffn.w2.weight"
-                , "layers." + str(i) + ".ffn.w3.weight"
-                , "layers." + str(i) + ".ln2.weight"]
+            weight_str_list = ["layers." + str(i) + ".attn.q_proj.weight", "layers." + str(i) + ".attn.k_proj.weight", "layers." + str(i) + ".attn.v_proj.weight", "layers." + str(i) + ".attn.output_proj.weight", "layers." + str(
+                i) + ".ln1.weight", "layers." + str(i) + ".ffn.w1.weight", "layers." + str(i) + ".ffn.w2.weight", "layers." + str(i) + ".ffn.w3.weight", "layers." + str(i) + ".ln2.weight"]
 
-            transformer_block = self.TransformerBlock(d_model, num_heads, d_ff, context_length, theta)
+            transformer_block = self.TransformerBlock(
+                d_model, num_heads, d_ff, context_length, theta)
             for weight_str in weight_str_list:
                 # 使用正则表达式去掉 layers.{num}. 部分
                 result_str = re.sub(r'^layers\.\d+\.', '', weight_str)

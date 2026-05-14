@@ -50,7 +50,8 @@ class Tokenizer:
             file_merge = []
             for line in mf:
                 [left, right] = line.split(' ')
-                file_merge.append((left.encode("utf-8"), right.encode("utf-8")))
+                file_merge.append(
+                    (left.encode("utf-8"), right.encode("utf-8")))
         return Tokenizer(file_vocab, file_merge, special_tokens)
 
     def encode(self, text: str) -> list[int]:
@@ -104,7 +105,8 @@ class Tokenizer:
                         encode_list.append(self._merges_cache[merge_true_byte])
                         idx += len(merge_true_byte)
                     else:
-                        encode_list.append(self._vocab_rev[single_byte_list[idx]])
+                        encode_list.append(
+                            self._vocab_rev[single_byte_list[idx]])
                         idx += 1
 
             # 如果有分隔符，要在后面追加分隔符的token_id
