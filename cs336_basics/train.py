@@ -5,14 +5,15 @@ from typing import IO, BinaryIO
 
 import numpy as np
 import torch
+
 from cs336_basics.BPE import BpeTrain
-from cs336_basics.Tokenizer import Tokenizer
 from cs336_basics.data.DataLoading import data_loading
 from cs336_basics.module.ScaledDotProductAttention import softmax
 from cs336_basics.module.TransformerLM import TransformerLM
 from cs336_basics.optimizer.AdamW import AdamW
 from cs336_basics.optimizer.learning_rate_schedule import learning_rate_schedule
 from cs336_basics.serialization.checkpoint import load_checkpoint, save_checkpoint
+from cs336_basics.Tokenizer import Tokenizer
 from cs336_basics.utils.cross_entropy import eval_cross_entropy
 from cs336_basics.utils.gradient_clipping import gradient_clipping
 
@@ -26,7 +27,7 @@ class TransformerTrainer:
 
     def _set_model(self, model_config):
         model_param_list = ["d_model", "num_heads", "d_ff",
-                            "rope_theta", "vocab_size", "num_layers"]
+                            "rope_theta", "vocab_size", "context_length", "num_layers"]
         d_model, num_heads, d_ff, rope_theta, vocab_size, context_length, num_layers = [
             model_config[i] for i in model_param_list]
         transformer_lm = TransformerLM(d_model, num_heads, d_ff, rope_theta, vocab_size, context_length,
@@ -156,7 +157,8 @@ class TransformerTrainer:
         while y != "<|endoftext|>" and gen_token <= max_tokens:
             return_tensor = self.model.forward(input_seq)
             return_tensor /= temperature
-            return_tensor = torch.where(return_tensor < threshold, torch.zeros_like(return_tensor), return_tensor)
+            return_tensor = torch.where(
+                return_tensor < threshold, torch.zeros_like(return_tensor), return_tensor)
             return_tensor = softmax(return_tensor / temperature, dim=0)
             y = vocab_rev[torch.argmax(return_tensor, dim=0)]
             gen_result += y
@@ -214,8 +216,10 @@ if __name__ == "__main__":
             "special_tokens": ["<|endoftext|>"],
         },
     }
-    tt = TransformerTrainer(config, "cuda")
-    vocab, merge = tt.prepare_data()
+    tt = TransformerTrainer(config["model"], config["optimizer"], "cpu")
+    vocab, merge = tt.prepare_data(
+        input_path="./data/TinyStoriesV2", output_dir="./data/output", bpe_config=config["bpe"])
     vocab_rev = {v: k for k, v in vocab.items()}
     tt.train()
-    tt.decode(vocab_rev, input_seq=[1, 23], max_tokens=1, temperature=2, threshold=0.01)
+    tt.decode(vocab_rev, input_seq=[1, 23],
+              max_tokens=1, temperature=2, threshold=0.01)
